@@ -1,105 +1,74 @@
 {
-  "config": {
-    "step": {
-      "user": {
-        "title": "Modbus Gateway - 选择连接类型",
-        "description": "选择 Modbus 连接方式\n\n{step_desc}",
-        "data": {
-          "type": "连接类型"
+    "config": {
+        "step": {
+            "user": {
+                "title": "Modbus Gateway - 选择连接类型",
+                "description": "选择 Modbus 连接方式\n\n{step_desc}",
+                "data": {
+                    "type": "连接类型"
+                }
+            },
+            "tcp": {
+                "title": "Modbus Gateway - TCP 连接",
+                "description": "配置 Modbus TCP 连接参数\n\n{step_desc}",
+                "data": {
+                    "name": "设备名称",
+                    "host": "IP 地址",
+                    "port": "端口号",
+                    "slave_id": "默认从站 ID",
+                    "timeout": "超时时间 (秒)",
+                    "retries": "重试次数",
+                    "retry_on_empty": "空响应时重试",
+                    "delay": "请求间隔 (秒)",
+                    "close_comm_on_error": "出错关闭连接"
+                }
+            },
+            "serial": {
+                "title": "Modbus Gateway - 串口连接",
+                "description": "配置 Modbus 串口连接参数\n\n{step_desc}",
+                "data": {
+                    "name": "设备名称",
+                    "serial_port": "串口设备路径",
+                    "baudrate": "波特率",
+                    "parity": "校验方式",
+                    "stop_bits": "停止位",
+                    "data_bits": "数据位",
+                    "slave_id": "默认从站 ID",
+                    "timeout": "超时时间 (秒)",
+                    "retries": "重试次数",
+                    "retry_on_empty": "空响应时重试",
+                    "delay": "请求间隔 (秒)",
+                    "close_comm_on_error": "出错关闭连接"
+                }
+            }
+        },
+        "error": {
+            "name_required": "名称为必填项"
         }
-      },
-      "tcp": {
-        "title": "Modbus Gateway - TCP 连接",
-        "description": "配置 Modbus TCP 连接参数\n\n{step_desc}",
-        "data": {
-          "name": "设备名称",
-          "host": "IP 地址",
-          "port": "端口号",
-          "slave_id": "默认从站 ID",
-          "timeout": "超时时间 (秒)",
-          "retries": "重试次数",
-          "retry_on_empty": "空响应时重试",
-          "delay": "请求间隔 (秒)",
-          "close_comm_on_error": "出错关闭连接"
-        }
-      },
-      "serial": {
-        "title": "Modbus Gateway - 串口连接",
-        "description": "配置 Modbus 串口连接参数\n\n{step_desc}",
-        "data": {
-          "name": "设备名称",
-          "serial_port": "串口设备路径",
-          "baudrate": "波特率",
-          "parity": "校验方式",
-          "stop_bits": "停止位",
-          "data_bits": "数据位",
-          "slave_id": "默认从站 ID",
-          "timeout": "超时时间 (秒)",
-          "retries": "重试次数",
-          "retry_on_empty": "空响应时重试",
-          "delay": "请求间隔 (秒)",
-          "close_comm_on_error": "出错关闭连接"
-        }
-      },
-      "data_points": {
-        "title": "Modbus Gateway - 配置数据点",
-        "description": "已添加 **{count}** 个数据点\n\n{points}\n\n选择「添加数据点」继续添加，或「完成配置」结束。"
-      },
-      "add_data_point": {
-        "title": "添加数据点",
-        "description": "{step_desc}",
-        "data": {
-          "name": "名称",
-          "address": "寄存器地址",
-          "count": "寄存器数量",
-          "slave": "从站 ID",
-          "entity_type": "实体类型",
-          "input_type": "输入类型",
-          "function_code": "功能码",
-          "data_type": "数据类型",
-          "custom_struct": "自定义 struct 格式",
-          "write_type": "读写类型",
-          "scale": "缩放系数",
-          "offset": "偏移量",
-          "precision": "精度",
-          "unit_of_measurement": "单位",
-          "scan_interval": "轮询间隔 (秒)",
-          "step": "步进值",
-          "min_value": "最小值",
-          "max_value": "最大值",
-          "options": "选项列表 (逗号分隔)",
-          "button_payload": "按钮负载 (HEX/RAW/DEC)",
-          "button_payload_type": "负载类型"
-        }
-      }
     },
-    "error": {
-      "name_required": "名称为必填项"
-    }
-  },
-  "options": {
-    "step": {
-      "manage_points": {
-        "title": "管理数据点",
-        "description": "已添加 **{count}** 个数据点\n\n{points}"
-      },
-      "add_point": {
-        "title": "添加数据点",
-        "data": {
-          "name": "名称",
-          "address": "寄存器地址",
-          "entity_type": "实体类型"
+    "options": {
+        "step": {
+            "manage_points": {
+                "title": "管理数据点",
+                "description": "已添加 **{count}** 个数据点\n\n{points}"
+            },
+            "add_point": {
+                "title": "添加数据点",
+                "data": {
+                    "name": "名称",
+                    "address": "寄存器地址",
+                    "entity_type": "实体类型"
+                }
+            }
         }
-      }
+    },
+    "selector": {
+        "connection_type": {
+            "options": {
+                "tcp": "Modbus TCP",
+                "serial_rtu": "Modbus RTU (串口)",
+                "serial_ascii": "Modbus ASCII (串口)"
+            }
+        }
     }
-  },
-  "selector": {
-    "connection_type": {
-      "options": {
-        "tcp": "Modbus TCP",
-        "serial_rtu": "Modbus RTU (串口)",
-        "serial_ascii": "Modbus ASCII (串口)"
-      }
-    }
-  }
 }

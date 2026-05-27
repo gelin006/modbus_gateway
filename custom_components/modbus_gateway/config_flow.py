@@ -322,7 +322,7 @@ class ModbusGatewayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             self._connection_config.update(user_input)
-            return await self.async_step_data_points()
+            return self._create_entry()
 
         return self.async_show_form(
             step_id="tcp",
@@ -341,7 +341,7 @@ class ModbusGatewayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             self._connection_config.update(user_input)
-            return await self.async_step_data_points()
+            return self._create_entry()
 
         return self.async_show_form(
             step_id="serial",
@@ -352,165 +352,18 @@ class ModbusGatewayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
         )
 
-    async def async_step_data_points(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Step 3: Manage data points (main menu)."""
-        errors = {}
-
-        if user_input is not None:
-            action = user_input.get("action", "finish")
-
-            if action == "add":
-                return await self.async_step_add_data_point()
-            elif action == "finish":
-                # Only store the data points into the config entry
-                _LOGGER.debug(
-                    "Finishing with %d data points",
-                    len(self._data_points),
-                )
-                return self._create_entry()
-
-        # Build the data points list summary
-        points_summary = []
-        for i, dp in enumerate(self._data_points):
-            entity_type = dp.get(CONF_DP_ENTITY_TYPE, "sensor")
-            desc = _get_field_description(entity_type)
-            write_type = dp.get(CONF_DP_WRITE_TYPE, WRITE_READ_WRITE)
-            write_icon = "📖" if write_type == WRITE_READ_ONLY else "✏️" if write_type == WRITE_READ_WRITE else "🔘"
-            points_summary.append(
-                f"  {i+1}. [{entity_type.upper()}] {dp.get(CONF_DP_NAME, '?')} "
-                f"(地址={dp.get(CONF_DP_ADDRESS, 0)}, "
-                f"从站={dp.get(CONF_DP_SLAVE, DEFAULT_SLAVE_ID)}, "
-                f"{write_icon} {write_type})"
-            )
-
-        points_text = "\n".join(points_summary) if points_summary else "  (暂无)"
-
-        data_points_menu = vol.Schema(
-            {
-                vol.Required("action", default="add"): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=[
-                            ("add", "➕ 添加数据点"),
-                            ("finish", "✅ 完成配置"),
-                        ],
-                        mode=selector.SelectSelectorMode.LIST,
-                    )
-                ),
-            }
-        )
-
-        return self.async_show_form(
-            step_id="data_points",
-            data_schema=data_points_menu,
-            errors=errors,
-            description_placeholders={
-                "points": points_text,
-                "count": str(len(self._data_points)),
-            },
-        )
-
-    async def async_step_add_data_point(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Step 4: Add a data point."""
-        errors = {}
-
-        if user_input is not None:
-            # Validate
-            name = user_input.get(CONF_DP_NAME, "").strip()
-            if not name:
-                errors["base"] = "name_required"
-            else:
-                # Normalize options string -> list
-                options_str = user_input.get(CONF_DP_OPTIONS, "")
-                options_list = (
-                    [o.strip() for o in options_str.split(",") if o.strip()]
-                    if options_str
-                    else None
-                )
-                user_input[CONF_DP_OPTIONS] = options_list
-
-                # Empty custom struct -> None
-                if user_input.get(CONF_DP_CUSTOM_STRUCT) == "":
-                    user_input[CONF_DP_CUSTOM_STRUCT] = None
-
-                # Empty unit string -> None
-                if user_input.get(CONF_DP_UNIT) == "":
-                    user_input[CONF_DP_UNIT] = None
-
-                # Store the data point
-                self._data_points.append(dict(user_input))
-                return await self.async_step_data_points()
-
-        schema = _build_data_point_schema()
-        return self.async_show_form(
-            step_id="add_data_point",
-            data_schema=vol.Schema(schema),
-            errors=errors,
-            description_placeholders={
-                "step_desc": "添加新的数据点。选择实体类型后，HA将生成对应的组件（开关、灯、空调等）"
-            },
-        )
-
-    async def async_step_edit_data_point(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Step 5: Edit an existing data point."""
-        errors = {}
-
-        if self._editing_point_index is None:
-            return await self.async_step_data_points()
-
-        if user_input is not None:
-            # Save the edited point
-            if 0 <= self._editing_point_index < len(self._data_points):
-                name = user_input.get(CONF_DP_NAME, "").strip()
-                if not name:
-                    errors["base"] = "name_required"
-                else:
-                    options_str = user_input.get(CONF_DP_OPTIONS, "")
-                    user_input[CONF_DP_OPTIONS] = (
-                        [o.strip() for o in options_str.split(",") if o.strip()]
-                        if options_str
-                        else None
-                    )
-                    if user_input.get(CONF_DP_CUSTOM_STRUCT) == "":
-                        user_input[CONF_DP_CUSTOM_STRUCT] = None
-                    if user_input.get(CONF_DP_UNIT) == "":
-                        user_input[CONF_DP_UNIT] = None
-
-                    self._data_points[self._editing_point_index] = dict(user_input)
-                    self._editing_point_index = None
-                    return await self.async_step_data_points()
-
-        dp = self._data_points[self._editing_point_index]
-        schema = _build_data_point_schema(dp)
-        return self.async_show_form(
-            step_id="edit_data_point",
-            data_schema=vol.Schema(schema),
-            errors=errors,
-            description_placeholders={
-                "step_desc": f"编辑数据点: {dp.get(CONF_DP_NAME, '?')}"
-            },
-        )
-
     def _create_entry(self) -> FlowResult:
-        """Create the config entry with connection config + data points."""
-        # Unique ID based on connection info
+        """Create the config entry with connection config (data points added via options)."""
         conn_type = self._connection_config.get(CONF_TYPE, TYPE_TCP)
         if conn_type == TYPE_TCP:
             unique_id = f"modbus_{conn_type}_{self._connection_config.get(CONF_HOST)}_{self._connection_config.get(CONF_PORT)}"
         else:
             unique_id = f"modbus_{conn_type}_{self._connection_config.get(CONF_SERIAL_PORT)}"
 
-        # Set unique ID (allow duplicate connections to different devices)
         self._async_abort_entries_match(unique_id)
 
-        # Combine connection config + data points into entry data
         entry_data = dict(self._connection_config)
-        entry_data[CONF_DATA_POINTS] = self._data_points
+        entry_data[CONF_DATA_POINTS] = []
 
         return self.async_create_entry(
             title=self._connection_config.get(CONF_NAME, "Modbus Device"),

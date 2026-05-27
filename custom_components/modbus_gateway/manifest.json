@@ -1,14 +1,20 @@
 {
   "domain": "modbus_gateway",
   "name": "Modbus Gateway",
-  "codeowners": ["@modbus-gateway"],
+  "codeowners": [
+    "@modbus-gateway"
+  ],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/gelin006/modbus_gateway",
   "issue_tracker": "https://github.com/gelin006/modbus_gateway/issues",
-  "requirements": ["pymodbus>=3.6.0,<4.0"],
-  "version": "1.0.1",
+  "requirements": [
+    "pymodbus>=3.6.0,<4.0"
+  ],
+  "version": "1.0.2",
   "iot_class": "local_push",
   "integration_type": "hub",
-  "loggers": ["pymodbus"]
+  "loggers": [
+    "pymodbus"
+  ]
 }
