@@ -1,0 +1,14 @@
+{
+  "domain": "modbus_gateway",
+  "name": "Modbus Gateway",
+  "codeowners": ["@modbus-gateway"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/your-username/modbus_gateway",
+  "issue_tracker": "https://github.com/your-username/modbus_gateway/issues",
+  "requirements": ["pymodbus>=3.6.0,<4.0"],
+  "version": "1.0.0",
+  "iot_class": "local_push",
+  "integration_type": "hub",
+  "loggers": ["pymodbus"]
+}
