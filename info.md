@@ -1,7 +1,7 @@
 # Modbus Gateway
 
 [![HACS Default](https://img.shields.io/badge/HACS-Default-orange.svg)](https://hacs.xyz)
-[![GitHub Release](https://img.shields.io/github/v/release/your-username/modbus_gateway)](https://github.com/your-username/modbus_gateway/releases)
+[![GitHub Release](https://img.shields.io/github/v/release/gelin006/modbus_gateway)](https://github.com/gelin006/modbus_gateway/releases)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.6+-blue.svg)](https://www.home-assistant.io/)
 
 一个功能强大的 Home Assistant Modbus 集成组件，通过 HACS 安装管理。
