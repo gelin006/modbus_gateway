@@ -391,88 +391,119 @@ class ModbusGatewayOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Manage options - start with data points."""
-        # Load existing data points
-        existing = self.config_entry.data.get(CONF_DATA_POINTS, [])
-        self._data_points = list(existing)
-        return await self.async_step_manage_points(user_input)
+        try:
+            existing = self.config_entry.data.get(CONF_DATA_POINTS, [])
+            self._data_points = list(existing)
+        except Exception as err:
+            _LOGGER.exception("OptionsFlow init failed: %s", err)
+            return self.async_show_form(
+                step_id="init",
+                data_schema=vol.Schema({}),
+                errors={"base": "unknown"},
+                description_placeholders={
+                    "points": f"初始化失败: {err}",
+                    "count": "0",
+                },
+            )
+        return await self.async_step_manage_points()
 
     async def async_step_manage_points(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Manage data points in options."""
-        if user_input is not None:
-            action = user_input.get("action", "finish")
+        try:
+            if user_input is not None:
+                action = user_input.get("action", "finish")
 
-            if action == "add":
-                return await self.async_step_add_point()
-            elif action == "finish":
-                # Save and create entry
-                new_data = dict(self.config_entry.data)
-                new_data[CONF_DATA_POINTS] = self._data_points
-                return self.async_create_entry(title="", data=new_data)
+                if action == "add":
+                    return await self.async_step_add_point()
+                elif action == "finish":
+                    # Save and create entry
+                    new_data = dict(self.config_entry.data)
+                    new_data[CONF_DATA_POINTS] = self._data_points
+                    return self.async_create_entry(title="", data=new_data)
 
-        points_summary = []
-        for i, dp in enumerate(self._data_points):
-            entity_type = dp.get(CONF_DP_ENTITY_TYPE, "sensor")
-            desc = _get_field_description(entity_type)
-            points_summary.append(
-                f"  {i+1}. [{entity_type.upper()}] {dp.get(CONF_DP_NAME, '?')} "
-                f"(地址={dp.get(CONF_DP_ADDRESS, 0)})"
+            points_summary = []
+            for i, dp in enumerate(self._data_points):
+                entity_type = dp.get(CONF_DP_ENTITY_TYPE, "sensor")
+                _desc = _get_field_description(entity_type)  # noqa: F841
+                points_summary.append(
+                    f"  {i+1}. [{entity_type.upper()}] {dp.get(CONF_DP_NAME, '?')} "
+                    f"(地址={dp.get(CONF_DP_ADDRESS, 0)})"
+                )
+
+            points_text = "\n".join(points_summary) if points_summary else "  (暂无)"
+
+            return self.async_show_form(
+                step_id="manage_points",
+                data_schema=vol.Schema(
+                    {
+                        vol.Required("action", default="add"): selector.SelectSelector(
+                            selector.SelectSelectorConfig(
+                                options=[
+                                    ("add", "➕ 添加数据点"),
+                                    ("finish", "✅ 完成配置"),
+                                ],
+                                mode=selector.SelectSelectorMode.LIST,
+                            )
+                        ),
+                    }
+                ),
+                description_placeholders={
+                    "points": points_text,
+                    "count": str(len(self._data_points)),
+                },
             )
-
-        points_text = "\n".join(points_summary) if points_summary else "  (暂无)"
-
-        return self.async_show_form(
-            step_id="manage_points",
-            data_schema=vol.Schema(
-                {
-                    vol.Required("action", default="add"): selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            options=[
-                                ("add", "➕ 添加数据点"),
-                                ("finish", "✅ 完成配置"),
-                            ],
-                            mode=selector.SelectSelectorMode.LIST,
-                        )
-                    ),
-                }
-            ),
-            description_placeholders={
-                "points": points_text,
-                "count": str(len(self._data_points)),
-            },
-        )
+        except Exception as err:
+            _LOGGER.exception("OptionsFlow manage_points failed: %s", err)
+            return self.async_show_form(
+                step_id="manage_points",
+                data_schema=vol.Schema({}),
+                errors={"base": "unknown"},
+                description_placeholders={
+                    "points": f"加载失败: {err}",
+                    "count": "0",
+                },
+            )
 
     async def async_step_add_point(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """Add a new data point in options."""
-        if user_input is not None:
-            name = user_input.get(CONF_DP_NAME, "").strip()
-            if not name:
-                return self.async_show_form(
-                    step_id="add_point",
-                    data_schema=vol.Schema(_build_data_point_schema()),
-                    errors={"base": "name_required"},
+        try:
+            if user_input is not None:
+                name = user_input.get(CONF_DP_NAME, "").strip()
+                if not name:
+                    return self.async_show_form(
+                        step_id="add_point",
+                        data_schema=vol.Schema(_build_data_point_schema()),
+                        errors={"base": "name_required"},
+                    )
+
+                options_str = user_input.get(CONF_DP_OPTIONS, "")
+                user_input[CONF_DP_OPTIONS] = (
+                    [o.strip() for o in options_str.split(",") if o.strip()]
+                    if options_str
+                    else None
                 )
+                if user_input.get(CONF_DP_CUSTOM_STRUCT) == "":
+                    user_input[CONF_DP_CUSTOM_STRUCT] = None
+                if user_input.get(CONF_DP_UNIT) == "":
+                    user_input[CONF_DP_UNIT] = None
+                if not user_input.get(CONF_DP_BUTTON_PAYLOAD):
+                    user_input[CONF_DP_BUTTON_PAYLOAD] = None
 
-            options_str = user_input.get(CONF_DP_OPTIONS, "")
-            user_input[CONF_DP_OPTIONS] = (
-                [o.strip() for o in options_str.split(",") if o.strip()]
-                if options_str
-                else None
+                self._data_points.append(dict(user_input))
+                return await self.async_step_manage_points()
+
+            return self.async_show_form(
+                step_id="add_point",
+                data_schema=vol.Schema(_build_data_point_schema()),
             )
-            if user_input.get(CONF_DP_CUSTOM_STRUCT) == "":
-                user_input[CONF_DP_CUSTOM_STRUCT] = None
-            if user_input.get(CONF_DP_UNIT) == "":
-                user_input[CONF_DP_UNIT] = None
-            if not user_input.get(CONF_DP_BUTTON_PAYLOAD):
-                user_input[CONF_DP_BUTTON_PAYLOAD] = None
-
-            self._data_points.append(dict(user_input))
-            return await self.async_step_manage_points()
-
-        return self.async_show_form(
-            step_id="add_point",
-            data_schema=vol.Schema(_build_data_point_schema()),
-        )
+        except Exception as err:
+            _LOGGER.exception("OptionsFlow add_point failed: %s", err)
+            return self.async_show_form(
+                step_id="add_point",
+                data_schema=vol.Schema({}),
+                errors={"base": "unknown"},
+            )
