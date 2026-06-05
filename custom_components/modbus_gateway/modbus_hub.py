@@ -110,6 +110,7 @@ class ModbusDataPoint:
         min_value: float | None = None,
         max_value: float | None = None,
         options: list[str] | None = None,
+        options_values: dict[str, int] | None = None,
         unique_id: str | None = None,
     ):
         self.name = name
@@ -133,6 +134,7 @@ class ModbusDataPoint:
         self.min_value = min_value
         self.max_value = max_value
         self.options = options
+        self.options_values = options_values or {}
         self.unique_id = unique_id
 
     @classmethod
@@ -162,6 +164,7 @@ class ModbusDataPoint:
             min_value=config.get(CONF_DP_MIN_VALUE),
             max_value=config.get(CONF_DP_MAX_VALUE),
             options=config.get(CONF_DP_OPTIONS),
+            options_values=config.get("options_values") or {},
             unique_id=config.get("unique_id"),
         )
 

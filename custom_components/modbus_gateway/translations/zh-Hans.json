@@ -54,11 +54,16 @@
             },
             "add_point": {
                 "title": "添加数据点",
+                "description": "Select类型，options支持两种格式：\n1. 标签,标签,标签（索引映射）\n2. 标签=值,标签=值（自定义值）\n示例：停止=0,低速=2,中速=4,高速=8",
                 "data": {
                     "name": "名称",
                     "address": "寄存器地址",
                     "entity_type": "实体类型"
                 }
+            },
+            "edit_point": {
+                "title": "编辑数据点",
+                "description": "Select类型的options支持标签=值,标签=值格式自定义映射值"
             }
         }
     },
