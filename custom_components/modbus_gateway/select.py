@@ -11,11 +11,29 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import ModbusHub
-from .const import CONF_DATA_POINTS, CONF_DP_NAME, DOMAIN
+from .const import DOMAIN
 from .entity import ModbusGatewayEntity
 from .modbus_hub import ModbusDataPoint
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up Modbus Gateway select entities."""
+    hub: ModbusHub = hass.data[DOMAIN][entry.entry_id]
+    entities = []
+
+    for unique_id, dp in hub.data_points.items():
+        if dp.entity_type == "select" and dp.options:
+            entities.append(ModbusGatewaySelect(hub, dp))
+
+    if entities:
+        async_add_entities(entities)
+
 
 # Options format: comma-separated "label=value" pairs
 # e.g. "停止=0,低速=2,中速=4,高速=8"
