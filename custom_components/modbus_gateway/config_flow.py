@@ -454,11 +454,9 @@ class ModbusGatewayOptionsFlow(config_entries.OptionsFlow):
                     {
                         vol.Required("action", default="add"): selector.SelectSelector(
                             selector.SelectSelectorConfig(
-                                options=[
-                                    ("add", "➕ 添加数据点"),
-                                    ("finish", "✅ 完成配置"),
-                                ],
+                                options=["add", "finish"],
                                 mode=selector.SelectSelectorMode.LIST,
+                                translation_key="manage_points_action",
                             )
                         ),
                     }

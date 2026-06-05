@@ -1,74 +1,80 @@
 {
-    "config": {
-        "step": {
-            "user": {
-                "title": "Modbus Gateway - Choose Connection",
-                "description": "Select Modbus connection type\n\n{step_desc}",
-                "data": {
-                    "type": "Connection Type"
-                }
-            },
-            "tcp": {
-                "title": "Modbus Gateway - TCP Connection",
-                "description": "Configure Modbus TCP connection\n\n{step_desc}",
-                "data": {
-                    "name": "Device Name",
-                    "host": "IP Address",
-                    "port": "Port",
-                    "slave_id": "Default Slave ID",
-                    "timeout": "Timeout (s)",
-                    "retries": "Retries",
-                    "retry_on_empty": "Retry on Empty Response",
-                    "delay": "Request Delay (s)",
-                    "close_comm_on_error": "Close on Error"
-                }
-            },
-            "serial": {
-                "title": "Modbus Gateway - Serial Connection",
-                "description": "Configure Modbus serial (RS-485) connection\n\n{step_desc}",
-                "data": {
-                    "name": "Device Name",
-                    "serial_port": "Serial Port Path",
-                    "baudrate": "Baud Rate",
-                    "parity": "Parity",
-                    "stop_bits": "Stop Bits",
-                    "data_bits": "Data Bits",
-                    "slave_id": "Default Slave ID",
-                    "timeout": "Timeout (s)",
-                    "retries": "Retries",
-                    "retry_on_empty": "Retry on Empty Response",
-                    "delay": "Request Delay (s)",
-                    "close_comm_on_error": "Close on Error"
-                }
-            }
-        },
-        "error": {
-            "name_required": "Name is required"
+  "config": {
+    "step": {
+      "user": {
+        "title": "Modbus Gateway - Choose Connection",
+        "description": "Select Modbus connection type\n\n{step_desc}",
+        "data": {
+          "type": "Connection Type"
         }
+      },
+      "tcp": {
+        "title": "Modbus Gateway - TCP Connection",
+        "description": "Configure Modbus TCP connection\n\n{step_desc}",
+        "data": {
+          "name": "Device Name",
+          "host": "IP Address",
+          "port": "Port",
+          "slave_id": "Default Slave ID",
+          "timeout": "Timeout (s)",
+          "retries": "Retries",
+          "retry_on_empty": "Retry on Empty Response",
+          "delay": "Request Delay (s)",
+          "close_comm_on_error": "Close on Error"
+        }
+      },
+      "serial": {
+        "title": "Modbus Gateway - Serial Connection",
+        "description": "Configure Modbus serial (RS-485) connection\n\n{step_desc}",
+        "data": {
+          "name": "Device Name",
+          "serial_port": "Serial Port Path",
+          "baudrate": "Baud Rate",
+          "parity": "Parity",
+          "stop_bits": "Stop Bits",
+          "data_bits": "Data Bits",
+          "slave_id": "Default Slave ID",
+          "timeout": "Timeout (s)",
+          "retries": "Retries",
+          "retry_on_empty": "Retry on Empty Response",
+          "delay": "Request Delay (s)",
+          "close_comm_on_error": "Close on Error"
+        }
+      }
     },
-    "options": {
-        "step": {
-            "manage_points": {
-                "title": "Manage Data Points",
-                "description": "**{count}** data point(s) configured\n\n{points}"
-            },
-            "add_point": {
-                "title": "Add Data Point",
-                "data": {
-                    "name": "Name",
-                    "address": "Register Address",
-                    "entity_type": "Entity Type"
-                }
-            }
-        }
-    },
-    "selector": {
-        "connection_type": {
-            "options": {
-                "tcp": "Modbus TCP",
-                "serial_rtu": "Modbus RTU (Serial)",
-                "serial_ascii": "Modbus ASCII (Serial)"
-            }
-        }
+    "error": {
+      "name_required": "Name is required"
     }
+  },
+  "options": {
+    "step": {
+      "manage_points": {
+        "title": "Manage Data Points",
+        "description": "**{count}** data point(s) configured\n\n{points}"
+      },
+      "add_point": {
+        "title": "Add Data Point",
+        "data": {
+          "name": "Name",
+          "address": "Register Address",
+          "entity_type": "Entity Type"
+        }
+      }
+    }
+  },
+  "selector": {
+    "connection_type": {
+      "options": {
+        "tcp": "Modbus TCP",
+        "serial_rtu": "Modbus RTU (Serial)",
+        "serial_ascii": "Modbus ASCII (Serial)"
+      }
+    },
+    "manage_points_action": {
+      "options": {
+        "add": "\u2795 Add data point",
+        "finish": "\u2705 Finish"
+      }
+    }
+  }
 }
