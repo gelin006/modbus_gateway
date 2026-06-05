@@ -212,8 +212,6 @@ class ModbusHub:
                     host=self.config[CONF_HOST],
                     port=self.config[CONF_PORT],
                     timeout=self.config.get(CONF_TIMEOUT, 5),
-                    retries=self.config.get(CONF_RETRIES, 3),
-                    retry_on_empty=self.config.get(CONF_RETRY_ON_EMPTY, False),
                 )
             elif conn_type in (TYPE_SERIAL_RTU, TYPE_SERIAL_ASCII):
                 self._client = AsyncModbusSerialClient(
@@ -223,8 +221,6 @@ class ModbusHub:
                     stopbits=self.config.get(CONF_STOP_BITS, 1),
                     bytesize=self.config.get(CONF_DATA_BITS, 8),
                     timeout=self.config.get(CONF_TIMEOUT, 5),
-                    retries=self.config.get(CONF_RETRIES, 3),
-                    retry_on_empty=self.config.get(CONF_RETRY_ON_EMPTY, False),
                 )
 
             if self._client:
