@@ -406,7 +406,11 @@ class ModbusGatewayOptionsFlow(config_entries.OptionsFlow):
     ) -> FlowResult:
         """Manage options - start with data points."""
         try:
-            existing = self.config_entry.data.get(CONF_DATA_POINTS, [])
+            # Read from entry.options (written by OptionsFlow), then fallback to data (ConfigFlow)
+            existing = (
+                self.config_entry.options.get(CONF_DATA_POINTS, []) or
+                self.config_entry.data.get(CONF_DATA_POINTS, [])
+            )
             self._data_points = list(existing)
         except Exception as err:
             _LOGGER.exception("OptionsFlow init failed: %s", err)
