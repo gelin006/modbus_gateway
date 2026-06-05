@@ -3,22 +3,18 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_NAME, Platform
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers.storage import Store
 
 from .const import (
     CONF_DATA_POINTS,
     CONF_TYPE,
     DOMAIN,
-    STORAGE_KEY,
-    STORAGE_VERSION,
 )
-from .modbus_hub import ModbusHub
+from .modbus_hub import ModbusDataPoint, ModbusHub
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -44,24 +40,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hub = ModbusHub(hass, entry.entry_id, entry.data)
     hass.data[DOMAIN][entry.entry_id] = hub
 
-    # Load stored data points
-    store = Store[dict[str, Any]](
-        hass, STORAGE_VERSION, f"{STORAGE_KEY}.{entry.entry_id}"
+    # Load data points from entry data (set via OptionsFlow)
+    dp_configs = entry.data.get(CONF_DATA_POINTS, [])
+    for dp_config in dp_configs:
+        dp = ModbusDataPoint.from_config(dp_config)
+        if dp.unique_id:
+            hub.data_points[dp.unique_id] = dp
+
+    _LOGGER.debug(
+        "Loaded %d data points for %s", len(hub.data_points), hub.name
     )
-    stored_data = await store.async_load()
 
-    if stored_data and "data_points" in stored_data:
-        from .modbus_hub import ModbusDataPoint
-
-        for dp_config in stored_data["data_points"]:
-            dp = ModbusDataPoint.from_config(dp_config)
-            if dp.unique_id:
-                hub.data_points[dp.unique_id] = dp
-
-    # Connect to the Modbus device
-    if not await hub.async_connect():
+    # Connect to the Modbus device (non-blocking, will retry)
+    connected = await hub.async_connect()
+    if not connected:
         _LOGGER.warning(
-            "Could not connect to Modbus device %s. Entities will retry automatically.",
+            "Could not connect to Modbus device %s. Will retry on entity update.",
             hub.name,
         )
 
@@ -76,7 +70,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         sw_version="1.0.0",
     )
 
-    # Forward setup to all platforms
+    # Forward setup to all platform entity types
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     # Register update listener for config changes
@@ -104,8 +98,4 @@ async def async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Handle removal of an entry."""
-    # Clean up stored data
-    store = Store[dict[str, Any]](
-        hass, STORAGE_VERSION, f"{STORAGE_KEY}.{entry.entry_id}"
-    )
-    await store.async_remove()
+    hass.data[DOMAIN].pop(entry.entry_id, None)

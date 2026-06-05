@@ -5,9 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import struct
-from typing import Any, Callable
 
-import async_timeout
 from pymodbus.client import (
     AsyncModbusTcpClient,
     AsyncModbusSerialClient,
@@ -29,13 +27,7 @@ from .const import (
     CONF_PARITY,
     CONF_STOP_BITS,
     CONF_DATA_BITS,
-    CONF_SLAVE_ID,
     CONF_TIMEOUT,
-    CONF_RETRIES,
-    CONF_RETRY_ON_EMPTY,
-    CONF_DELAY,
-    CONF_CLOSE_COMM_ON_ERROR,
-    CONF_DATA_POINTS,
     CONF_DP_SLAVE,
     CONF_DP_ADDRESS,
     CONF_DP_COUNT,
@@ -190,7 +182,6 @@ class ModbusHub:
         self._lock = asyncio.Lock()
         self._connected = False
         self.data_points: dict[str, ModbusDataPoint] = {}
-        self._callbacks: list[Callable] = []
 
     @property
     def name(self) -> str:
@@ -249,10 +240,12 @@ class ModbusHub:
     async def async_read_data(
         self, data_point: ModbusDataPoint
     ) -> Any | None:
-        """Read data from a single data point."""
+        """Read data from a single data point.
+        Auto-reconnect if connection was lost."""
         if not self._client or not self._connected:
-            _LOGGER.warning("Not connected to Modbus device %s", self.name)
-            return None
+            _LOGGER.warning("Reconnecting to Modbus device %s", self.name)
+            if not await self.async_connect():
+                return None
 
         async with self._lock:
             try:

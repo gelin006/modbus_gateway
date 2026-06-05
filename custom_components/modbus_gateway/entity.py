@@ -7,8 +7,7 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers.entity import DeviceInfo
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.entity import DeviceInfo, Entity
 
 from .const import DOMAIN
 from .modbus_hub import ModbusDataPoint, ModbusHub
@@ -16,8 +15,10 @@ from .modbus_hub import ModbusDataPoint, ModbusHub
 _LOGGER = logging.getLogger(__name__)
 
 
-class ModbusGatewayEntity(CoordinatorEntity):
+class ModbusGatewayEntity(Entity):
     """Base entity for all Modbus Gateway entities."""
+
+    _attr_should_poll = True
 
     def __init__(
         self,
@@ -25,10 +26,11 @@ class ModbusGatewayEntity(CoordinatorEntity):
         data_point: ModbusDataPoint,
     ) -> None:
         """Initialize the entity."""
-        super().__init__(hub)
+        super().__init__()
         self._hub = hub
         self._data_point = data_point
         self._attr_name = data_point.name
+        self._attr_has_entity_name = True
 
         # Unique ID
         if data_point.unique_id:
@@ -36,7 +38,7 @@ class ModbusGatewayEntity(CoordinatorEntity):
         else:
             self._attr_unique_id = (
                 f"{hub.entry_id}_{data_point.entity_type}_"
-                f"{data_point.slave}_{data_point.address}_{data_point.name.lower().replace(' ', '_')}"
+                f"{data_point.slave}_{data_point.address}_{self._sanitize_id(data_point.name)}"
             )
 
         # Device info
@@ -57,6 +59,11 @@ class ModbusGatewayEntity(CoordinatorEntity):
             "modbus_data_type": data_point.data_type,
             "modbus_function_code": data_point.function_code,
         }
+
+    @staticmethod
+    def _sanitize_id(name: str) -> str:
+        """Sanitize a name for use in unique_id."""
+        return name.lower().replace(" ", "_").replace("-", "_").replace(".", "_")
 
     @property
     def available(self) -> bool:

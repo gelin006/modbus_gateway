@@ -11,7 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import ModbusHub
-from .const import CONF_DATA_POINTS, CONF_DP_NAME, DOMAIN, INPUT_TYPE_COIL
+from .const import DOMAIN
 from .entity import ModbusGatewayEntity
 from .modbus_hub import ModbusDataPoint
 
