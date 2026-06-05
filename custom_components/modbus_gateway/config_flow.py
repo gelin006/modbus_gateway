@@ -383,7 +383,7 @@ class ModbusGatewayOptionsFlow(config_entries.OptionsFlow):
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize options flow."""
-        self.config_entry = config_entry
+        super().__init__(config_entry)
         self._data_points: list[dict[str, Any]] = []
         self._editing_point_index: int | None = None
 
