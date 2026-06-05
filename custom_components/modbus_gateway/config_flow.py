@@ -151,6 +151,18 @@ SERIAL_SCHEMA = vol.Schema(
 )
 
 # --- Data point schema (add/edit a single point) ---
+def _ensure_options_str(value: Any) -> str:
+    """Convert options to string format for the form.
+
+    Handles both list (deprecated storage format) and str.
+    """
+    if isinstance(value, list):
+        return ",".join(value)
+    if isinstance(value, str):
+        return value
+    return ""
+
+
 def _build_data_point_schema(defaults: dict[str, Any] | None = None) -> dict:
     """Build schema for a data point."""
     d = defaults or {}
@@ -236,7 +248,8 @@ def _build_data_point_schema(defaults: dict[str, Any] | None = None) -> dict:
             None, vol.Coerce(float)
         ),
         vol.Optional(
-            CONF_DP_OPTIONS, default=d.get(CONF_DP_OPTIONS, "")
+            CONF_DP_OPTIONS,
+            default=_ensure_options_str(d.get(CONF_DP_OPTIONS, "")),
         ): str,
         # Button payload fields (for non-standard protocol / raw command)
         vol.Optional(
