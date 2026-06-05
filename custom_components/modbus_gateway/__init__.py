@@ -36,12 +36,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if DOMAIN not in hass.data:
         hass.data[DOMAIN] = {}
 
-    # Create the Modbus hub
-    hub = ModbusHub(hass, entry.entry_id, entry.data)
+    # Create the Modbus hub — merge options into data so OptionsFlow changes apply
+    merged_config = {**entry.data, **entry.options}
+    hub = ModbusHub(hass, entry.entry_id, merged_config)
     hass.data[DOMAIN][entry.entry_id] = hub
 
-    # Load data points from entry data (set via OptionsFlow)
-    dp_configs = entry.data.get(CONF_DATA_POINTS, [])
+    # Load data points (options overrides data, since OptionsFlow saves to entry.options)
+    merged = {**entry.data, **entry.options}
+    dp_configs = merged.get(CONF_DATA_POINTS, [])
     for dp_config in dp_configs:
         dp = ModbusDataPoint.from_config(dp_config)
         if dp.unique_id:
