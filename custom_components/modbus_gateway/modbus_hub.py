@@ -266,19 +266,19 @@ class ModbusHub:
 
                 if data_point.input_type == INPUT_TYPE_COIL:
                     result = await self._client.read_coils(
-                        address, count, slave=slave
+                        address, count, unit=slave
                     )
                 elif data_point.input_type == INPUT_TYPE_DISCRETE:
                     result = await self._client.read_discrete_inputs(
-                        address, count, slave=slave
+                        address, count, unit=slave
                     )
                 elif data_point.input_type == INPUT_TYPE_INPUT:
                     result = await self._client.read_input_registers(
-                        address, count, slave=slave
+                        address, count, unit=slave
                     )
                 else:  # holding registers
                     result = await self._client.read_holding_registers(
-                        address, count, slave=slave
+                        address, count, unit=slave
                     )
 
                 if result is None:
@@ -345,18 +345,18 @@ class ModbusHub:
 
                 if input_type == INPUT_TYPE_COIL:
                     result = await self._client.write_coil(
-                        address, bool(value), slave=slave
+                        address, bool(value), unit=slave
                     )
                 else:
                     # For registers, encode value to register list
                     reg_values = self._encode_value(value, data_point)
                     if len(reg_values) == 1:
                         result = await self._client.write_register(
-                            address, reg_values[0], slave=slave
+                            address, reg_values[0], unit=slave
                         )
                     else:
                         result = await self._client.write_registers(
-                            address, reg_values, slave=slave
+                            address, reg_values, unit=slave
                         )
 
                 if isinstance(result, ExceptionResponse):
@@ -416,15 +416,14 @@ class ModbusHub:
                 if fc_byte == FC_WRITE_SINGLE_COIL:
                     val = struct.unpack(">H", data_bytes[0:2])[0]
                     result = await self._client.write_coil(
-                        data_point.address, bool(val), slave=slave_byte
+                        data_point.address, bool(val), unit=slave_byte
                     )
                 elif fc_byte == FC_WRITE_SINGLE_REGISTER:
                     val = struct.unpack(">H", data_bytes[0:2])[0]
                     result = await self._client.write_register(
-                        data_point.address, val, slave=slave_byte
+                        data_point.address, val, unit=slave_byte
                     )
                 elif fc_byte == FC_WRITE_MULTIPLE_REGISTERS:
-                    # Parse: address(2) + qty(2) + byte_count(1) + regs...
                     reg_addr = struct.unpack(">H", data_bytes[0:2])[0]
                     reg_qty = struct.unpack(">H", data_bytes[2:4])[0]
                     byte_count = data_bytes[4]
@@ -436,7 +435,7 @@ class ModbusHub:
                                 struct.unpack(">H", data_bytes[off : off + 2])[0]
                             )
                     result = await self._client.write_registers(
-                        reg_addr, reg_values, slave=slave_byte
+                        reg_addr, reg_values, unit=slave_byte
                     )
                 elif fc_byte == FC_WRITE_MULTIPLE_COILS:
                     reg_addr = struct.unpack(">H", data_bytes[0:2])[0]
@@ -452,7 +451,7 @@ class ModbusHub:
                                 if idx < reg_qty:
                                     coil_values.append(bool(byte_val & (1 << bit)))
                     result = await self._client.write_coils(
-                        reg_addr, coil_values, slave=slave_byte
+                        reg_addr, coil_values, unit=slave_byte
                     )
                 else:
                     # For other function codes, send raw transaction
