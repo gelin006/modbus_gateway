@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 import struct
 
@@ -177,18 +178,65 @@ class ModbusDataPoint:
         )
 
 
-class ModbusHub:
-    """Manages a single Modbus connection and its associated data points."""
+async def _call_client_method(method, *args, slave_id: int, **kwargs):
+    """Call a pymodbus client method with runtime-adaptive slave/unit parameter.
 
-    def __init__(
-        self,
-        hass: HomeAssistant,
-        entry_id: str,
-        config: dict[str, Any],
-    ) -> None:
+    Different pymodbus versions use different parameter names:
+    - Some use 'slave' (v3.0+)
+    - Some use 'unit' (v3.6+)
+    - Some have deprecated kwarg and accept positional only
+
+    This function tries strategies in order and caches the winner.
+    """
+    # Check if we already have a cached param name for this method
+    cache_attr = f"_mg_slave_kwarg_{method.__name__}"
+    client = args[0]  # self for bound method
+    cached = getattr(client.__class__, cache_attr, None) if hasattr(client.__class__, cache_attr) else None
+
+    if cached is not None:
+        # Use cached strategy
+        if cached == "positional":
+            return await method(*args, slave_id, **kwargs)
+        else:
+            return await method(*args, **kwargs, **{cached: slave_id})
+
+    # Detect strategies
+    for kw in ("unit", "slave"):
+        try:
+            result = await method(*args, **kwargs, **{kw: slave_id})
+            setattr(client.__class__, cache_attr, kw)
+            _LOGGER.debug(
+                "ModbusGateway: detected kwarg '%s' for %s", kw, method.__name__
+            )
+            return result
+        except TypeError as e:
+            if "unexpected keyword argument" in str(e):
+                continue
+            raise
+
+    # Fallback: try positional
+    try:
+        result = await method(*args, slave_id, **kwargs)
+        setattr(client.__class__, cache_attr, "positional")
+        _LOGGER.debug(
+            "ModbusGateway: using positional param for %s", method.__name__
+        )
+        return result
+    except TypeError:
+        pass
+
+    raise TypeError(
+        f"Could not find valid slave/unit parameter for {method.__name__}"
+    )
+
+
+class ModbusHub:
+    """Manages connection and data exchange with a Modbus device."""
+
+    def __init__(self, hass: HomeAssistant, config: dict[str, Any], entry_id: str | None = None):
         self.hass = hass
-        self.entry_id = entry_id
         self.config = config
+        self.entry_id = entry_id
         self._client: AsyncModbusTcpClient | AsyncModbusSerialClient | None = None
         self._lock = asyncio.Lock()
         self._connected = False
@@ -216,29 +264,36 @@ class ModbusHub:
                     timeout=self.config.get(CONF_TIMEOUT, 5),
                 )
             elif conn_type in (TYPE_SERIAL_RTU, TYPE_SERIAL_ASCII):
+                parity = self.config.get(CONF_PARITY, "N")
                 self._client = AsyncModbusSerialClient(
                     port=self.config[CONF_SERIAL_PORT],
                     baudrate=self.config.get(CONF_BAUDRATE, 9600),
-                    parity=self.config.get(CONF_PARITY, "N"),
+                    parity=parity.upper()[0] if parity else "N",
                     stopbits=self.config.get(CONF_STOP_BITS, 1),
                     bytesize=self.config.get(CONF_DATA_BITS, 8),
                     timeout=self.config.get(CONF_TIMEOUT, 5),
                 )
+            else:
+                _LOGGER.error("Unsupported connection type: %s", conn_type)
+                return False
 
-            if self._client:
-                await self._client.connect()
+            result = await self._client.connect()
+            if result:
                 self._connected = True
                 _LOGGER.info("Connected to Modbus device: %s", self.name)
-                return True
+            else:
+                self._connected = False
+                _LOGGER.error("Failed to connect to Modbus device: %s", self.name)
 
-        except (ConnectionException, ModbusException, OSError) as err:
-            _LOGGER.error("Failed to connect to Modbus device %s: %s", self.name, err)
+            return self._connected
 
-        self._connected = False
-        return False
+        except Exception as err:
+            _LOGGER.error("Connection error for %s: %s", self.name, err)
+            self._connected = False
+            return False
 
-    async def async_disconnect(self) -> None:
-        """Disconnect from Modbus device."""
+    async def async_disconnect(self):
+        """Close connection."""
         if self._client:
             try:
                 self._client.close()
@@ -265,20 +320,20 @@ class ModbusHub:
                 count = data_point.count
 
                 if data_point.input_type == INPUT_TYPE_COIL:
-                    result = await self._client.read_coils(
-                        address, count, unit=slave
+                    result = await _call_client_method(
+                        self._client.read_coils, address, count, slave_id=slave
                     )
                 elif data_point.input_type == INPUT_TYPE_DISCRETE:
-                    result = await self._client.read_discrete_inputs(
-                        address, count, unit=slave
+                    result = await _call_client_method(
+                        self._client.read_discrete_inputs, address, count, slave_id=slave
                     )
                 elif data_point.input_type == INPUT_TYPE_INPUT:
-                    result = await self._client.read_input_registers(
-                        address, count, unit=slave
+                    result = await _call_client_method(
+                        self._client.read_input_registers, address, count, slave_id=slave
                     )
                 else:  # holding registers
-                    result = await self._client.read_holding_registers(
-                        address, count, unit=slave
+                    result = await _call_client_method(
+                        self._client.read_holding_registers, address, count, slave_id=slave
                     )
 
                 if result is None:
@@ -344,19 +399,19 @@ class ModbusHub:
                 input_type = data_point.input_type
 
                 if input_type == INPUT_TYPE_COIL:
-                    result = await self._client.write_coil(
-                        address, bool(value), unit=slave
+                    result = await _call_client_method(
+                        self._client.write_coil, address, bool(value), slave_id=slave
                     )
                 else:
                     # For registers, encode value to register list
                     reg_values = self._encode_value(value, data_point)
                     if len(reg_values) == 1:
-                        result = await self._client.write_register(
-                            address, reg_values[0], unit=slave
+                        result = await _call_client_method(
+                            self._client.write_register, address, reg_values[0], slave_id=slave
                         )
                     else:
-                        result = await self._client.write_registers(
-                            address, reg_values, unit=slave
+                        result = await _call_client_method(
+                            self._client.write_registers, address, reg_values, slave_id=slave
                         )
 
                 if isinstance(result, ExceptionResponse):
@@ -415,13 +470,13 @@ class ModbusHub:
 
                 if fc_byte == FC_WRITE_SINGLE_COIL:
                     val = struct.unpack(">H", data_bytes[0:2])[0]
-                    result = await self._client.write_coil(
-                        data_point.address, bool(val), unit=slave_byte
+                    result = await _call_client_method(
+                        self._client.write_coil, data_point.address, bool(val), slave_id=slave_byte
                     )
                 elif fc_byte == FC_WRITE_SINGLE_REGISTER:
                     val = struct.unpack(">H", data_bytes[0:2])[0]
-                    result = await self._client.write_register(
-                        data_point.address, val, unit=slave_byte
+                    result = await _call_client_method(
+                        self._client.write_register, data_point.address, val, slave_id=slave_byte
                     )
                 elif fc_byte == FC_WRITE_MULTIPLE_REGISTERS:
                     reg_addr = struct.unpack(">H", data_bytes[0:2])[0]
@@ -434,8 +489,8 @@ class ModbusHub:
                             reg_values.append(
                                 struct.unpack(">H", data_bytes[off : off + 2])[0]
                             )
-                    result = await self._client.write_registers(
-                        reg_addr, reg_values, unit=slave_byte
+                    result = await _call_client_method(
+                        self._client.write_registers, reg_addr, reg_values, slave_id=slave_byte
                     )
                 elif fc_byte == FC_WRITE_MULTIPLE_COILS:
                     reg_addr = struct.unpack(">H", data_bytes[0:2])[0]
@@ -450,8 +505,8 @@ class ModbusHub:
                                 idx = i * 8 + bit
                                 if idx < reg_qty:
                                     coil_values.append(bool(byte_val & (1 << bit)))
-                    result = await self._client.write_coils(
-                        reg_addr, coil_values, unit=slave_byte
+                    result = await _call_client_method(
+                        self._client.write_coils, reg_addr, coil_values, slave_id=slave_byte
                     )
                 else:
                     # For other function codes, send raw transaction
