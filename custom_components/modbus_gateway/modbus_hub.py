@@ -179,54 +179,70 @@ class ModbusDataPoint:
 
 
 # Cache for detected slave/unit parameter names by method name
-_SLAVE_PARAM_CACHE: dict[str, str] = {}
+_SLAVE_PARAM_CACHE: dict[str, str | None] = {}
+
+
+def _find_slave_param_name(method) -> str | None:
+    """Use introspection to find the slave/unit parameter name."""
+    try:
+        sig = inspect.signature(method)
+        params = list(sig.parameters.keys())
+        _LOGGER.debug(
+            "ModbusGateway: signature for %s: %s",
+            method.__name__, params
+        )
+        for name in ("unit", "slave", "slave_id", "device_id", "dest", "unit_id"):
+            if name in sig.parameters:
+                return name
+        if len(params) >= 4:
+            return params[3]
+        return None
+    except (ValueError, TypeError) as err:
+        _LOGGER.debug(
+            "ModbusGateway: introspection failed for %s: %s",
+            method.__name__, err
+        )
+        return None
 
 
 async def _call_client_method(method, *args, slave_id: int, **kwargs):
-    """Call a pymodbus client method with runtime-adaptive slave/unit parameter.
-
-    Different pymodbus versions use different parameter names:
-    - Some use 'slave' (v3.0+)
-    - Some use 'unit' (v3.6+)
-    - Some accept positional slave arg
-
-    This function tries strategies in order and caches the winner.
-    """
+    """Call a pymodbus method, auto-detecting slave parameter strategy."""
     method_name = method.__name__
     cached = _SLAVE_PARAM_CACHE.get(method_name)
 
     if cached is not None:
-        if cached == "positional":
+        if cached == "__none__":
+            return await method(*args, **kwargs)
+        if cached == "__positional__":
             return await method(*args, slave_id, **kwargs)
         return await method(*args, **kwargs, **{cached: slave_id})
 
-    # Try keyword strategies: 'unit' first, then 'slave'
-    for kw in ("unit", "slave"):
-        try:
-            result = await method(*args, **kwargs, **{kw: slave_id})
-            _SLAVE_PARAM_CACHE[method_name] = kw
-            _LOGGER.debug(
-                "ModbusGateway: detected kwarg '%s' for %s", kw, method_name
-            )
-            return result
-        except TypeError as e:
-            if "unexpected keyword argument" in str(e):
-                continue
-            raise
+    # 1. Try via introspection
+    param_name = _find_slave_param_name(method)
+    if param_name is not None:
+        _SLAVE_PARAM_CACHE[method_name] = param_name
+        return await method(*args, **kwargs, **{param_name: slave_id})
 
-    # Fallback: try positional
+    # 2. Try no slave param at all (some clients default to unit=1 internally)
+    try:
+        result = await method(*args, **kwargs)
+        if result is not None:
+            _SLAVE_PARAM_CACHE[method_name] = "__none__"
+            _LOGGER.debug("ModbusGateway: no slave param needed for %s", method_name)
+            return result
+    except TypeError:
+        pass
+
+    # 3. Try positional (legacy)
     try:
         result = await method(*args, slave_id, **kwargs)
-        _SLAVE_PARAM_CACHE[method_name] = "positional"
-        _LOGGER.debug(
-            "ModbusGateway: using positional param for %s", method_name
-        )
+        _SLAVE_PARAM_CACHE[method_name] = "__positional__"
         return result
     except TypeError:
         pass
 
     raise TypeError(
-        f"Could not find valid slave/unit parameter for {method_name}"
+        f"ModbusGateway: cannot determine slave parameter for {method_name}"
     )
 
 
