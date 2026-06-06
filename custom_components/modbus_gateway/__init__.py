@@ -44,10 +44,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Load data points (options overrides data, since OptionsFlow saves to entry.options)
     merged = {**entry.data, **entry.options}
     dp_configs = merged.get(CONF_DATA_POINTS, [])
-    for dp_config in dp_configs:
+    for i, dp_config in enumerate(dp_configs):
         dp = ModbusDataPoint.from_config(dp_config)
-        if dp.unique_id:
-            hub.data_points[dp.unique_id] = dp
+        uid = dp.unique_id or f"dp_{i}_{dp.entity_type}_{dp.address}"
+        dp.unique_id = uid
+        hub.data_points[uid] = dp
 
     _LOGGER.debug(
         "Loaded %d data points for %s", len(hub.data_points), hub.name
