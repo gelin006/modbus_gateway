@@ -178,35 +178,35 @@ class ModbusDataPoint:
         )
 
 
+# Cache for detected slave/unit parameter names by method name
+_SLAVE_PARAM_CACHE: dict[str, str] = {}
+
+
 async def _call_client_method(method, *args, slave_id: int, **kwargs):
     """Call a pymodbus client method with runtime-adaptive slave/unit parameter.
 
     Different pymodbus versions use different parameter names:
     - Some use 'slave' (v3.0+)
     - Some use 'unit' (v3.6+)
-    - Some have deprecated kwarg and accept positional only
+    - Some accept positional slave arg
 
     This function tries strategies in order and caches the winner.
     """
-    # Check if we already have a cached param name for this method
-    cache_attr = f"_mg_slave_kwarg_{method.__name__}"
-    client = args[0]  # self for bound method
-    cached = getattr(client.__class__, cache_attr, None) if hasattr(client.__class__, cache_attr) else None
+    method_name = method.__name__
+    cached = _SLAVE_PARAM_CACHE.get(method_name)
 
     if cached is not None:
-        # Use cached strategy
         if cached == "positional":
             return await method(*args, slave_id, **kwargs)
-        else:
-            return await method(*args, **kwargs, **{cached: slave_id})
+        return await method(*args, **kwargs, **{cached: slave_id})
 
-    # Detect strategies
+    # Try keyword strategies: 'unit' first, then 'slave'
     for kw in ("unit", "slave"):
         try:
             result = await method(*args, **kwargs, **{kw: slave_id})
-            setattr(client.__class__, cache_attr, kw)
+            _SLAVE_PARAM_CACHE[method_name] = kw
             _LOGGER.debug(
-                "ModbusGateway: detected kwarg '%s' for %s", kw, method.__name__
+                "ModbusGateway: detected kwarg '%s' for %s", kw, method_name
             )
             return result
         except TypeError as e:
@@ -217,16 +217,16 @@ async def _call_client_method(method, *args, slave_id: int, **kwargs):
     # Fallback: try positional
     try:
         result = await method(*args, slave_id, **kwargs)
-        setattr(client.__class__, cache_attr, "positional")
+        _SLAVE_PARAM_CACHE[method_name] = "positional"
         _LOGGER.debug(
-            "ModbusGateway: using positional param for %s", method.__name__
+            "ModbusGateway: using positional param for %s", method_name
         )
         return result
     except TypeError:
         pass
 
     raise TypeError(
-        f"Could not find valid slave/unit parameter for {method.__name__}"
+        f"Could not find valid slave/unit parameter for {method_name}"
     )
 
 
