@@ -12,6 +12,7 @@ from pymodbus.client import (
     AsyncModbusSerialClient,
 )
 from pymodbus.exceptions import ConnectionException, ModbusException
+from pymodbus.framer import FramerType
 from pymodbus.pdu import ExceptionResponse
 
 from homeassistant.core import HomeAssistant
@@ -182,67 +183,69 @@ class ModbusDataPoint:
 _SLAVE_PARAM_CACHE: dict[str, str | None] = {}
 
 
-def _find_slave_param_name(method) -> str | None:
-    """Use introspection to find the slave/unit parameter name."""
-    try:
-        sig = inspect.signature(method)
-        params = list(sig.parameters.keys())
-        _LOGGER.debug(
-            "ModbusGateway: signature for %s: %s",
-            method.__name__, params
-        )
-        for name in ("unit", "slave", "slave_id", "device_id", "dest", "unit_id"):
-            if name in sig.parameters:
-                return name
-        if len(params) >= 4:
-            return params[3]
-        return None
-    except (ValueError, TypeError) as err:
-        _LOGGER.debug(
-            "ModbusGateway: introspection failed for %s: %s",
-            method.__name__, err
-        )
-        return None
+async def _call_client_method(method, *args, slave_id: int = 0, **kwargs):
+    """Call a pymodbus method, auto-detecting calling convention.
 
-
-async def _call_client_method(method, *args, slave_id: int, **kwargs):
-    """Call a pymodbus method, auto-detecting slave parameter strategy."""
+    Strategies tried in order (results cached per method):
+    1. All params as kwargs (handles modern pymodbus with keyword-only params)
+    2. Known slave keyword names: unit, slave, slave_id, device_id, dest, unit_id
+    3. Positional slave (append after args)
+    4. No slave param (modern framers embed slave in frame)
+    """
     method_name = method.__name__
     cached = _SLAVE_PARAM_CACHE.get(method_name)
 
     if cached is not None:
+        if cached == "__all_kwargs__":
+            return await method(**kwargs)
         if cached == "__none__":
             return await method(*args, **kwargs)
         if cached == "__positional__":
             return await method(*args, slave_id, **kwargs)
         return await method(*args, **kwargs, **{cached: slave_id})
 
-    # 1. Try via introspection
-    param_name = _find_slave_param_name(method)
-    if param_name is not None:
-        _SLAVE_PARAM_CACHE[method_name] = param_name
-        return await method(*args, **kwargs, **{param_name: slave_id})
-
-    # 2. Try no slave param at all (some clients default to unit=1 internally)
+    # 1. All kwargs (best for pymodbus with keyword-only count/slave params)
     try:
-        result = await method(*args, **kwargs)
-        if result is not None:
-            _SLAVE_PARAM_CACHE[method_name] = "__none__"
-            _LOGGER.debug("ModbusGateway: no slave param needed for %s", method_name)
-            return result
+        result = await method(**kwargs)
+        _SLAVE_PARAM_CACHE[method_name] = "__all_kwargs__"
+        _LOGGER.debug("ModbusGateway: all-kwargs works for %s", method_name)
+        return result
     except TypeError:
         pass
 
-    # 3. Try positional (legacy)
+    # 2. Known slave keywords
+    for kw in ("unit", "slave", "slave_id", "device_id", "dest", "unit_id"):
+        try:
+            result = await method(*args, **kwargs, **{kw: slave_id})
+            _SLAVE_PARAM_CACHE[method_name] = kw
+            _LOGGER.debug("ModbusGateway: slave kwarg '%s' for %s", kw, method_name)
+            return result
+        except TypeError as e:
+            err = str(e).lower()
+            if "unexpected keyword" in err or "multiple values" in err:
+                continue
+            raise
+
+    # 3. Positional slave
     try:
         result = await method(*args, slave_id, **kwargs)
         _SLAVE_PARAM_CACHE[method_name] = "__positional__"
+        _LOGGER.debug("ModbusGateway: positional slave for %s", method_name)
+        return result
+    except TypeError:
+        pass
+
+    # 4. No slave param
+    try:
+        result = await method(*args, **kwargs)
+        _SLAVE_PARAM_CACHE[method_name] = "__none__"
+        _LOGGER.debug("ModbusGateway: no slave param for %s", method_name)
         return result
     except TypeError:
         pass
 
     raise TypeError(
-        f"ModbusGateway: cannot determine slave parameter for {method_name}"
+        f"ModbusGateway: cannot determine calling convention for {method_name}"
     )
 
 
@@ -278,6 +281,7 @@ class ModbusHub:
                     host=self.config[CONF_HOST],
                     port=self.config[CONF_PORT],
                     timeout=self.config.get(CONF_TIMEOUT, 5),
+                    framer=FramerType.RTU,
                 )
             elif conn_type in (TYPE_SERIAL_RTU, TYPE_SERIAL_ASCII):
                 parity = self.config.get(CONF_PARITY, "N")
@@ -337,19 +341,19 @@ class ModbusHub:
 
                 if data_point.input_type == INPUT_TYPE_COIL:
                     result = await _call_client_method(
-                        self._client.read_coils, address, count, slave_id=slave
+                        self._client.read_coils, address=address, count=count, slave_id=slave
                     )
                 elif data_point.input_type == INPUT_TYPE_DISCRETE:
                     result = await _call_client_method(
-                        self._client.read_discrete_inputs, address, count, slave_id=slave
+                        self._client.read_discrete_inputs, address=address, count=count, slave_id=slave
                     )
                 elif data_point.input_type == INPUT_TYPE_INPUT:
                     result = await _call_client_method(
-                        self._client.read_input_registers, address, count, slave_id=slave
+                        self._client.read_input_registers, address=address, count=count, slave_id=slave
                     )
                 else:  # holding registers
                     result = await _call_client_method(
-                        self._client.read_holding_registers, address, count, slave_id=slave
+                        self._client.read_holding_registers, address=address, count=count, slave_id=slave
                     )
 
                 if result is None:
@@ -416,18 +420,18 @@ class ModbusHub:
 
                 if input_type == INPUT_TYPE_COIL:
                     result = await _call_client_method(
-                        self._client.write_coil, address, bool(value), slave_id=slave
+                        self._client.write_coil, address=address, value=bool(value), slave_id=slave
                     )
                 else:
                     # For registers, encode value to register list
                     reg_values = self._encode_value(value, data_point)
                     if len(reg_values) == 1:
                         result = await _call_client_method(
-                            self._client.write_register, address, reg_values[0], slave_id=slave
+                            self._client.write_register, address=address, value=reg_values[0], slave_id=slave
                         )
                     else:
                         result = await _call_client_method(
-                            self._client.write_registers, address, reg_values, slave_id=slave
+                            self._client.write_registers, address=address, values=reg_values, slave_id=slave
                         )
 
                 if isinstance(result, ExceptionResponse):
