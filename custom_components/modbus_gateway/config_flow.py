@@ -436,13 +436,11 @@ class ModbusGatewayOptionsFlow(config_entries.OptionsFlow):
                 if action == "add":
                     return await self.async_step_add_point()
                 elif action == "finish":
-                    # Update entry.data directly so data points survive reboot
-                    # OptionsFlow data goes to entry.options which may not persist reliably
-                    new_data = {**self.config_entry.data, CONF_DATA_POINTS: self._data_points}
-                    self.hass.config_entries.async_update_entry(
-                        self.config_entry, data=new_data
+                    # Save data points to entry.options — HA auto-triggers reload
+                    return self.async_create_entry(
+                        title="",
+                        data={CONF_DATA_POINTS: self._data_points}
                     )
-                    return self.async_create_entry(title="", data={})
 
             points_summary = []
             for i, dp in enumerate(self._data_points):
