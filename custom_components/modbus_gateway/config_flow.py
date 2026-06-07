@@ -435,6 +435,8 @@ class ModbusGatewayOptionsFlow(config_entries.OptionsFlow):
 
                 if action == "add":
                     return await self.async_step_add_point()
+                elif action == "delete":
+                    return await self.async_step_delete_point()
                 elif action == "finish":
                     # Save data points to entry.options — HA auto-triggers reload
                     return self.async_create_entry(
@@ -459,7 +461,7 @@ class ModbusGatewayOptionsFlow(config_entries.OptionsFlow):
                     {
                         vol.Required("action", default="add"): selector.SelectSelector(
                             selector.SelectSelectorConfig(
-                                options=["add", "finish"],
+                                options=["add", "delete", "finish"],
                                 mode=selector.SelectSelectorMode.LIST,
                                 translation_key="manage_points_action",
                             )
@@ -524,3 +526,56 @@ class ModbusGatewayOptionsFlow(config_entries.OptionsFlow):
                 data_schema=vol.Schema({}),
                 errors={"base": "unknown"},
             )
+
+    async def async_step_delete_point(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Delete a data point in options."""
+        try:
+            if user_input is not None:
+                index_str = user_input.get("delete_index", "-1")
+                try:
+                    index = int(index_str)
+                except (ValueError, TypeError):
+                    index = -1
+                if 0 <= index < len(self._data_points):
+                    removed = self._data_points.pop(index)
+                    _LOGGER.debug(
+                        "Deleted data point: %s",
+                        removed.get(CONF_DP_NAME, "?"),
+                    )
+                return await self.async_step_manage_points()
+
+            point_options = {}
+            for i, dp in enumerate(self._data_points):
+                entity_type = dp.get(CONF_DP_ENTITY_TYPE, "sensor")
+                name = dp.get(CONF_DP_NAME, "?")
+                addr = dp.get(CONF_DP_ADDRESS, 0)
+                label = f"{i+1}. [{entity_type.upper()}] {name} (地址={addr})"
+                point_options[str(i)] = label
+
+            if not point_options:
+                return await self.async_step_manage_points()
+
+            return self.async_show_form(
+                step_id="delete_point",
+                data_schema=vol.Schema(
+                    {
+                        vol.Required("delete_index"): selector.SelectSelector(
+                            selector.SelectSelectorConfig(
+                                options=[
+                                    selector.SelectOptionDict(value=str(i), label=label)
+                                    for i, label in point_options.items()
+                                ],
+                                mode=selector.SelectSelectorMode.DROPDOWN,
+                            )
+                        ),
+                    }
+                ),
+                description_placeholders={
+                    "count": str(len(self._data_points)),
+                },
+            )
+        except Exception as err:
+            _LOGGER.exception("OptionsFlow delete_point failed: %s", err)
+            return await self.async_step_manage_points()
